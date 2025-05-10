@@ -35,16 +35,16 @@ Optional environment variables:
 
 ```bash
 # Build the container
-docker build -t route-finder .
+docker build -t optimal-route .
 
 # Run with environment variables
 docker run -p 8080:8080 \
   -e GOOGLE_API_KEY=your_api_key_here \
   -e MCP_TRANSPORT=streamable-http \
-  route-finder
+  optimal-route
 
 # Or using an env file
-docker run -p 8080:8080 --env-file .env route-finder
+docker run -p 8080:8080 --env-file .env optimal-route
 ```
 
 ## Example .env file

@@ -1,9 +1,20 @@
 """
-Optimal-route MCP server (SSE transport)
+Optimal-route MCP server
 
 Run it with:
-    python route_mcp_server.py          # default (STDIO)
-    python route_mcp_server.py sse 8000 # SSE on port 8000
+    # Default (streamable-http on port 8080)
+    python router.py
+
+    # Using SSE transport on port 3000
+    python router.py --transport sse --port 3000
+
+    # Using stdio transport
+    python router.py --transport stdio
+
+Available transport options:
+    - sse
+    - streamable-http (default)
+    - stdio
 
 Requirements (add to requirements.txt if you haven't already):
     requests
