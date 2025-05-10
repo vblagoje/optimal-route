@@ -13,6 +13,7 @@ Requirements (add to requirements.txt if you haven't already):
 
 import os
 from typing import List
+import argparse
 
 import requests
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
@@ -160,10 +161,6 @@ def compute_optimal_route(
 
     :returns: A dictionary containing:
         - **optimal_route**: List of ordered place names forming the route.
-        - **optimal_route_pretty**: A human-readable string of the route.
-        - **alpha**: The alpha value used.
-        - **beta**: The beta value used.
-        - **round_trip**: Whether the route loops back to the start.
     """
     if len(place_names) < 2:
         raise ValueError("Provide at least two place names.")
@@ -175,12 +172,7 @@ def compute_optimal_route(
     order = _solve_tsp(cost, round_trip)
 
     ordered_list = [place_names[i] for i in order]
-    readable = " → ".join(ordered_list)
-
-    return {
-        "optimal_route": ordered_list,
-        "optimal_route_pretty": readable,
-    }
+    return {"optimal_route": ordered_list}
 
 
 # --------------------------------------------------------------------------- #
@@ -188,16 +180,28 @@ def compute_optimal_route(
 # --------------------------------------------------------------------------- #
 
 if __name__ == "__main__":
-    import sys
+    parser = argparse.ArgumentParser(description="Run the MCP server.")
+    parser.add_argument(
+        "--transport",
+        choices=["sse", "streamable-http", "stdio"],
+        default="streamable-http",
+        help="Transport method to use (default: streamable-http)",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind the server to (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port to bind the server to (default: 8080)",
+    )
+    args = parser.parse_args()
 
-    # Optional CLI: `python route_mcp_server.py sse 8000`
-    transport = sys.argv[1] if len(sys.argv) > 1 else "stdio"
-    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8000
-
-    if transport == "sse":
-        # SSE is deprecated in favour of Streamable HTTP but still supported.
-        mcp.settings.host = "localhost"
-        mcp.settings.port = port
-        mcp.run(transport="sse")
-    else:
-        mcp.run()  # default: stdio
+    mcp.settings.host = args.host
+    mcp.settings.port = args.port
+    mcp.run(
+        transport=args.transport,
+    )

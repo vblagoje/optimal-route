@@ -1,4 +1,4 @@
 requests
 ortools
-mcp
+mcp[cli]>=1.8.0
 
