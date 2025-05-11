@@ -233,8 +233,6 @@ def compute_optimal_route(
 
     :returns: A dictionary containing:
         - **optimal_route**: List of ordered place names forming the route.
-        - **optimal_route_unit**: "km"
-        - **optimal_route_unit**: "minutes"
     """
     if len(points_of_interest) < 2:
         raise ValueError("Provide at least two points of interest.")
