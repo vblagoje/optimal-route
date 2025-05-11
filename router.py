@@ -66,14 +66,18 @@ def _geocode(place_names: List[str]) -> list[tuple[float, float]]:
     return coords
 
 
-def _distance_matrix(coords: list[tuple[float, float]]) -> list[dict]:
+def _distance_matrix(coords: list[tuple[float, float]], mode: str) -> list[dict]:
     """Call the Google Distance Matrix (v2) endpoint once and return raw JSON."""
     waypoints = [
         {"waypoint": {"location": {"latLng": {"latitude": lat, "longitude": lon}}}}
         for lat, lon in coords
     ]
+    if mode.upper() not in ["DRIVE", "WALK", "BICYCLE", "TRANSIT"]:
+        raise ValueError(
+            f"Invalid travel mode: {mode}. Valid modes are: DRIVE, WALK, BICYCLE, TRANSIT"
+        )
     payload = {
-        "travelMode": "DRIVE",
+        "travelMode": mode.upper(),
         "origins": waypoints,
         "destinations": waypoints,
     }
@@ -153,36 +157,95 @@ def _solve_tsp(cost: list[list[float]], round_trip: bool = True) -> list[int]:
 # --------------------------------------------------------------------------- #
 #  MCP tool (auto-documented from type hints & docstring)
 # --------------------------------------------------------------------------- #
+@mcp.tool()
+def get_distance_matrix(points_of_interest: List[str], mode: str = "DRIVE") -> dict:
+    """
+    Calculate distance and duration matrices between all pairs of points of interest.
+
+    :param points_of_interest: A list of points of interest to calculate distances between.
+    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT)
+
+    :returns: A dictionary containing:
+        - **durations**: Matrix of travel times in minutes between places.
+        - **distances**: Matrix of travel distances in kilometers between places.
+        - **points_of_interest**: List of points of interest in the same order as matrices.
+    """
+    coords = _geocode(points_of_interest)
+    raw = _distance_matrix(coords, mode=mode)
+    mins, kms = _parse_matrix(raw, len(points_of_interest))
+
+    return {
+        "durations": mins,
+        "durations_unit": "minutes",
+        "distances": kms,
+        "distances_unit": "km",
+        "points_of_interest": points_of_interest,
+    }
+
+
+@mcp.tool()
+def get_distance(origin: str, destination: str, mode: str = "DRIVE") -> dict:
+    """
+    Calculate distance and duration between two points of interest.
+
+    :param origin: Starting point of interest.
+    :param destination: Ending point of interest.
+    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT)
+
+    :returns: A dictionary containing:
+        - **duration**: Travel time in minutes.
+        - **duration_unit**: "minutes"
+        - **distance**: Travel distance in kilometers.
+        - **distance_unit**: "km"
+        - **origin**: Origin point of interest.
+        - **destination**: Destination point of interest.
+    """
+    coords = _geocode([origin, destination])
+    raw = _distance_matrix(coords, mode=mode)
+    mins, kms = _parse_matrix(raw, 2)
+
+    return {
+        "duration": mins[0][1],
+        "duration_unit": "minutes",
+        "distance": kms[0][1],
+        "distance_unit": "km",
+        "origin": origin,
+        "destination": destination,
+    }
 
 
 @mcp.tool()
 def compute_optimal_route(
-    place_names: List[str],
+    points_of_interest: List[str],
     alpha: float = 1.0,
     beta: float = 0.2,
     round_trip: bool = True,
+    mode: str = "DRIVE",
 ) -> dict:
     """
-    Calculate the optimal driving route through specified locations.
+    Calculate the optimal route through specified locations.
 
-    :param place_names: A list of city or point-of-interest names (3–10 recommended).
+    :param points_of_interest: A list of city or point-of-interest names (3–10 recommended).
     :param alpha: The weight for travel time in minutes in the cost calculation.
     :param beta: The weight for travel distance in kilometers in the cost calculation.
     :param round_trip: If True (default), return to the first place. If False, end at the last.
+    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT)
 
     :returns: A dictionary containing:
         - **optimal_route**: List of ordered place names forming the route.
+        - **optimal_route_unit**: "km"
+        - **optimal_route_unit**: "minutes"
     """
-    if len(place_names) < 2:
-        raise ValueError("Provide at least two place names.")
+    if len(points_of_interest) < 2:
+        raise ValueError("Provide at least two points of interest.")
 
-    coords = _geocode(place_names)
-    raw = _distance_matrix(coords)
-    mins, kms = _parse_matrix(raw, len(place_names))
+    coords = _geocode(points_of_interest)
+    raw = _distance_matrix(coords, mode=mode)
+    mins, kms = _parse_matrix(raw, len(points_of_interest))
     cost = _cost_matrix(mins, kms, alpha, beta)
     order = _solve_tsp(cost, round_trip)
 
-    ordered_list = [place_names[i] for i in order]
+    ordered_list = [points_of_interest[i] for i in order]
     return {"optimal_route": ordered_list}
 
 
