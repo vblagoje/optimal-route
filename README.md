@@ -4,16 +4,53 @@ A Model Context Protocol (MCP) server that calculates optimal routes between mul
 
 ## MCP Server Capabilities
 
-This server exposes the following MCP primitives:
+This server exposes the following MCP tools:
 
-- **Tools**: 
-  - `compute_optimal_route`: Calculate the optimal driving route through specified locations
+- `compute_optimal_route`: Calculate the optimal route through specified locations.
     - Parameters:
-      - `place_names`: List of city or point-of-interest names (3–10 recommended)
-      - `alpha`: Weight for travel time in minutes (default: 1.0)
-      - `beta`: Weight for travel distance in kilometers (default: 0.2)
-      - `round_trip`: Whether to return to the start point i.e. first POI in the list (default: true)
+      - `points_of_interest`: A list of city or point-of-interest names (3–10 recommended).
+      - `alpha`: The weight for travel time in minutes in the cost calculation (default: 1.0).
+      - `beta`: The weight for travel distance in kilometers in the cost calculation (default: 0.2).
+      - `round_trip`: If True (default), return to the first place. If False, end at the last.
+      - `mode`: Travel mode (default: `DRIVE`). Available options:
+        - `DRIVE`: Driving mode.
+        - `WALK`: Walking mode.
+        - `BICYCLE`: Cycling mode.
+        - `TRANSIT`: Public transit mode.
+    - Returns:
+      - `optimal_route`: List of ordered place names forming the route.
+ - `get_distance_matrix`: Calculate distance and duration matrices between all pairs of points of interest.
+    - Parameters:
+      - `points_of_interest`: A list of points of interest to calculate distances between.
+      - `mode`: Travel mode (default: `DRIVE`). Available options:
+        - `DRIVE`: Driving mode.
+        - `WALK`: Walking mode.
+        - `BICYCLE`: Cycling mode.
+        - `TRANSIT`: Public transit mode.
+    - Returns:
+      - `durations`: Matrix of travel times in minutes between places.
+      - `durations_unit`: Unit for durations, which is "minutes".
+      - `distances`: Matrix of travel distances in kilometers between places.
+      - `distances_unit`: Unit for distances, which is "km".
+      - `points_of_interest`: List of points of interest in the same order as matrices.
 
+ - `get_distance`: Calculate distance and duration between two points of interest.
+    - Parameters:
+      - `origin`: Starting point of interest.
+      - `destination`: Ending point of interest.
+      - `mode`: Travel mode (default: `DRIVE`). Available options:
+        - `DRIVE`: Driving mode.
+        - `WALK`: Walking mode.
+        - `BICYCLE`: Cycling mode.
+        - `TRANSIT`: Public transit mode.
+    - Returns:
+      - `duration`: Travel time in minutes.
+      - `duration_unit`: Unit for duration, which is "minutes".
+      - `distance`: Travel distance in kilometers.
+      - `distance_unit`: Unit for distance, which is "km".
+      - `origin`: Origin point of interest.
+      - `destination`: Destination point of interest. 
+  
 ## Environment Variables
 
 The following environment variables are required:
@@ -35,13 +72,13 @@ Optional environment variables:
 
 ```bash
 # Build the container
-docker build -t optimal-route .
+docker build -t vblagoje/optimal-route .
 
 # Run with environment variables
 docker run -p 8080:8080 \
   -e GOOGLE_API_KEY=your_api_key_here \
   -e MCP_TRANSPORT=streamable-http \
-  optimal-route
+  vblagoje/optimal-route
 
 # Or using an env file
 docker run -p 8080:8080 --env-file .env optimal-route
