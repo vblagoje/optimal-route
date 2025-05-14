@@ -85,7 +85,7 @@ A dictionary detailing the relationship, with the following structure:
 
 **Required:**
 
-* `GOOGLE_API_KEY`: Google Maps API key (with Geocoding, Routes, Distance Matrix access)
+* `GOOGLE_API_KEY`: Google Maps API key (with Geocoding, Routes, Distance Matrix access). Get it [here](https://developers.google.com/maps/documentation/routes/get-api-key).
 
 **Optional:**
 
