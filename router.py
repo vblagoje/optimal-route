@@ -26,6 +26,7 @@ import math
 import os
 from typing import List
 import argparse
+from urllib.parse import quote_plus
 
 import requests
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
@@ -155,6 +156,28 @@ def _solve_tsp(cost: list[list[float]], round_trip: bool = True) -> list[int]:
     return order
 
 
+def _build_google_maps_url(places: List[str]) -> str:
+    """
+    Constructs a Google Maps URL for a driving route with up to 25 stops.
+
+    :param places: List of place names in order.
+    :return: Google Maps URL as a string.
+    """
+    if len(places) < 2:
+        raise ValueError("At least two places are required to build a route.")
+    if len(places) > 25:
+        # This limit is based on typical Google Maps URL behavior for multiple waypoints.
+        raise ValueError(
+            "Google Maps URL generation supports up to 25 stops in a single route."
+        )
+
+    base_url = "https://www.google.com/maps/dir/"
+    # Ensure all place names are strings, as quote_plus expects strings
+    encoded_places = [quote_plus(str(place)) for place in places]
+    url = base_url + "/".join(encoded_places)
+    return url
+
+
 # --------------------------------------------------------------------------- #
 #  MCP tool (auto-documented from type hints & docstring)
 # --------------------------------------------------------------------------- #
@@ -203,9 +226,12 @@ def compute_optimal_route(
 
     :returns: A dictionary containing:
         - **optimal_route**: List of ordered place names forming the route.
+        - **google_maps_url**: A direct link to Google Maps for the generated route.
     """
     if len(points_of_interest) < 2:
-        raise ValueError("Provide at least two points of interest.")
+        raise ValueError(
+            f"Provide at least two points of interest. Received {points_of_interest}"
+        )
 
     coords = _geocode(points_of_interest)
     raw = _distance_matrix(coords, mode=mode)
@@ -214,7 +240,8 @@ def compute_optimal_route(
     order = _solve_tsp(cost, round_trip)
 
     ordered_list = [points_of_interest[i] for i in order]
-    return {"optimal_route": ordered_list}
+    google_maps_link = _build_google_maps_url(ordered_list)
+    return {"optimal_route": ordered_list, "google_maps_url": google_maps_link}
 
 
 @mcp.tool()
