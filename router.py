@@ -218,19 +218,21 @@ def compute_optimal_route(
     """
     Calculate the optimal route through specified locations.
 
-    :param points_of_interest: A list of city or point-of-interest names (3–10 recommended).
+    :param points_of_interest: A list of city or point-of-interest names.
+                               Must contain between 2 and 25 items, inclusive.
     :param alpha: The weight for travel time in minutes in the cost calculation.
     :param beta: The weight for travel distance in kilometers in the cost calculation.
     :param round_trip: If True (default), return to the first place. If False, end at the last.
-    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT)
+    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT), defaults to "DRIVE"
 
     :returns: A dictionary containing:
         - **optimal_route**: List of ordered place names forming the route.
         - **google_maps_url**: A direct link to Google Maps for the generated route.
     """
-    if len(points_of_interest) < 2:
+    num_pois = len(points_of_interest)
+    if not (2 <= num_pois <= 25):
         raise ValueError(
-            f"Provide at least two points of interest. Received {points_of_interest}"
+            f"The list of points_of_interest must contain between 2 and 25 items. Received {num_pois} items: {points_of_interest}"
         )
 
     coords = _geocode(points_of_interest)
