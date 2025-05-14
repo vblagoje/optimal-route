@@ -21,6 +21,7 @@ Returns the optimal path through a list of points of interest.
 **Returns:**
 
 * `optimal_route` (list of str): Ordered place names forming the best route.
+* `google_maps_url` (str): A direct link to Google Maps for the generated route.
 
 ---
 
