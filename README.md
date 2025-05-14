@@ -43,24 +43,41 @@ Returns time and distance matrices between all locations.
 
 ---
 
-### `get_distance`
+### `get_distance_direction`
 
-Returns time and distance between two locations.
+Analyzes the comprehensive relationship between two points of interest (POIs), including travel distance, estimated travel time, and cardinal direction.
+
+POIs are identified by their string names or addresses (e.g."Munich", "Eiffel Tower, Paris", "1 Infinite Loop, Cupertino, CA").
 
 **Parameters:**
 
-* `origin` (str)
-* `destination` (str)
-* `mode` (str): Travel mode (default: `DRIVE`)
+* `origin` (str): The name or address of the starting/reference point of interest. Example: "Pisa, Italy"
+* `destination` (str): The name or address of the ending/target point of interest. Example: "Florence, Italy"
+* `mode` (str): The mode of travel for distance and duration calculations. Defaults to "DRIVE". Accepted values: "DRIVE", "WALK", "BICYCLE", "TRANSIT".
 
 **Returns:**
 
-* `duration` (float)
-* `distance` (float)
-* `origin` (str)
-* `destination` (str)
-* `duration_unit`: `"minutes"`
-* `distance_unit`: `"km"`
+A dictionary detailing the relationship, with the following structure:
+
+*   `distance` (dict): Contains travel distance information.
+    *   `value` (float): The numerical value of the distance.
+    *   `unit` (str): The unit of distance (e.g., "km").
+*   `duration` (dict): Contains estimated travel time information.
+    *   `value` (int): The numerical value of the travel time.
+    *   `unit` (str): The unit of time (e.g., "minutes").
+    *   `mode` (str): The travel mode used for this estimation.
+*   `cardinal` (dict): Contains cardinal direction and coordinate information.
+    *   `origin` (dict): Details of the origin POI.
+        *   `name` (str): The provided name/address of the origin POI.
+        *   `lat` (float): Latitude of the geocoded origin.
+        *   `lon` (float): Longitude of the geocoded origin.
+    *   `destination` (dict): Details of the destination POI.
+        *   `name` (str): The provided name/address of the destination POI.
+        *   `lat` (float): Latitude of the geocoded destination.
+        *   `lon` (float): Longitude of the geocoded destination.
+    *   `bearing` (float): Compass bearing from origin to destination, in degrees (0-360).
+    *   `direction` (str): Standard two-letter cardinal direction (e.g., "N", "NE", "E", "SE", "S", "SW", "W", "NW").
+*   `explanation` (str): An LLM-friendly, human-readable summary combining distance, duration, and directional information.
 
 ---
 

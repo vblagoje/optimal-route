@@ -22,6 +22,7 @@ Requirements (add to requirements.txt if you haven't already):
     mcp[cli]
 """
 
+import math
 import os
 from typing import List
 import argparse
@@ -184,37 +185,6 @@ def get_distance_matrix(points_of_interest: List[str], mode: str = "DRIVE") -> d
 
 
 @mcp.tool()
-def get_distance(origin: str, destination: str, mode: str = "DRIVE") -> dict:
-    """
-    Calculate distance and duration between two points of interest.
-
-    :param origin: Starting point of interest.
-    :param destination: Ending point of interest.
-    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT)
-
-    :returns: A dictionary containing:
-        - **duration**: Travel time in minutes.
-        - **duration_unit**: "minutes"
-        - **distance**: Travel distance in kilometers.
-        - **distance_unit**: "km"
-        - **origin**: Origin point of interest.
-        - **destination**: Destination point of interest.
-    """
-    coords = _geocode([origin, destination])
-    raw = _distance_matrix(coords, mode=mode)
-    mins, kms = _parse_matrix(raw, 2)
-
-    return {
-        "duration": mins[0][1],
-        "duration_unit": "minutes",
-        "distance": kms[0][1],
-        "distance_unit": "km",
-        "origin": origin,
-        "destination": destination,
-    }
-
-
-@mcp.tool()
 def compute_optimal_route(
     points_of_interest: List[str],
     alpha: float = 1.0,
@@ -245,6 +215,146 @@ def compute_optimal_route(
 
     ordered_list = [points_of_interest[i] for i in order]
     return {"optimal_route": ordered_list}
+
+
+@mcp.tool()
+def get_distance_direction(origin: str, destination: str, mode: str = "DRIVE") -> dict:
+    """
+    Analyzes the comprehensive relationship between two points of interest (POIs),
+    including travel distance, estimated travel time, and cardinal direction.
+
+    POIs are identified by their string names or addresses (e.g."Munich", "Eiffel Tower, Paris", "1 Infinite Loop, Cupertino, CA").
+
+    :param origin: The name or address of the starting/reference point of interest.
+                   Example: "Pisa, Italy"
+    :param destination: The name or address of the ending/target point of interest.
+                       Example: "Florence, Italy"
+    :param mode: The mode of travel for distance and duration calculations.
+                 Defaults to "DRIVE". Accepted values: "DRIVE", "WALK", "BICYCLE", "TRANSIT".
+
+    :returns: A dictionary detailing the relationship, with the following structure:
+        - **distance** (dict): Contains travel distance information.
+            - **value** (float): The numerical value of the distance.
+            - **unit** (str): The unit of distance (e.g., "km").
+        - **duration** (dict): Contains estimated travel time information.
+            - **value** (int): The numerical value of the travel time.
+            - **unit** (str): The unit of time (e.g., "minutes").
+            - **mode** (str): The travel mode used for this estimation.
+        - **cardinal** (dict): Contains cardinal direction and coordinate information.
+            - **origin** (dict): Details of the origin POI.
+                - **name** (str): The provided name/address of the origin POI.
+                - **lat** (float): Latitude of the geocoded origin.
+                - **lon** (float): Longitude of the geocoded origin.
+            - **destination** (dict): Details of the destination POI.
+                - **name** (str): The provided name/address of the destination POI.
+                - **lat** (float): Latitude of the geocoded destination.
+                - **lon** (float): Longitude of the geocoded destination.
+            - **bearing** (float): Compass bearing from origin to destination, in degrees (0-360).
+            - **direction** (str): Standard two-letter cardinal direction
+                                         (e.g., "N", "NE", "E", "SE", "S", "SW", "W", "NW").
+        - **explanation** (str): An LLM-friendly, human-readable summary combining distance,
+                               duration, and directional information.
+    """
+    # Get coordinates for both POIs
+    coords = _geocode([origin, destination])
+    if not coords or len(coords) != 2:
+        return {
+            "distance": None,
+            "duration": None,
+            "cardinal": {},
+            "explanation": "Failed to geocode one or both points of interest.",
+        }
+
+    # Get distance and duration
+    raw = _distance_matrix(coords, mode=mode)
+    mins, kms = _parse_matrix(raw, 2)
+    distance = kms[0][1]
+    duration = mins[0][1]
+
+    # Extract coordinates
+    origin_lat, origin_lon = coords[0]
+    dest_lat, dest_lon = coords[1]
+
+    # Determine cardinal relationships
+    is_north = dest_lat > origin_lat
+    is_south = dest_lat < origin_lat
+    is_east = dest_lon > origin_lon
+    is_west = dest_lon < origin_lon
+
+    # Determine cardinal direction code (e.g., N, NE, E, etc.)
+    if is_north and is_east:
+        cardinal_direction = "NE"
+    elif is_north and is_west:
+        cardinal_direction = "NW"
+    elif is_south and is_east:
+        cardinal_direction = "SE"
+    elif is_south and is_west:
+        cardinal_direction = "SW"
+    elif is_north:
+        cardinal_direction = "N"
+    elif is_south:
+        cardinal_direction = "S"
+    elif is_east:
+        cardinal_direction = "E"
+    elif is_west:
+        cardinal_direction = "W"
+    else:
+        raise ValueError("Failed to determine cardinal direction.")
+
+    # Convert latitude and longitude from degrees to radians
+    lat1 = math.radians(origin_lat)
+    lon1 = math.radians(origin_lon)
+    lat2 = math.radians(dest_lat)
+    lon2 = math.radians(dest_lon)
+
+    # Calculate bearing
+    dlon = lon2 - lon1
+    y = math.sin(dlon) * math.cos(lat2)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(
+        dlon
+    )
+    bearing = math.atan2(y, x)
+
+    # Convert bearing from radians to degrees
+    bearing = math.degrees(bearing)
+    # Normalize bearing to 0-360 degrees
+    bearing = (bearing + 360) % 360
+
+    # Create comprehensive explanation
+    explanation = f"{destination} is {cardinal_direction} of {origin} "
+    explanation += f"at bearing {bearing:.1f}°. "
+    explanation += (
+        f"It is {distance:.1f} km away ({duration} minutes by {mode.lower()}). "
+    )
+    explanation += f"Coordinates: {origin} ({origin_lat:.6f}, {origin_lon:.6f}), "
+    explanation += f"{destination} ({dest_lat:.6f}, {dest_lon:.6f})"
+
+    return {
+        "distance": {
+            "value": distance,
+            "unit": "km",
+        },
+        "duration": {
+            "value": duration,
+            "unit": "minutes",
+            "mode": mode,
+        },
+        "cardinal": {
+            "origin": {
+                "name": origin,
+                "lat": origin_lat,
+                "lon": origin_lon,
+            },
+            "destination": {
+                "name": destination,
+                "lat": dest_lat,
+                "lon": dest_lon,
+            },
+            "bearing": bearing,
+            "direction": cardinal_direction,
+        },
+        "explanation": explanation,
+    }
 
 
 # --------------------------------------------------------------------------- #
