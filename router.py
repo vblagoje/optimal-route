@@ -53,7 +53,19 @@ mcp = FastMCP("Route Planner")
 
 
 def _geocode(place_names: List[str]) -> list[tuple[float, float]]:
-    """Resolve place names to (lat, lon)."""
+    """
+    Resolve place names to (lat, lon) coordinates.
+
+    For accurate geocoding, provide specific place names including city, region, and/or country
+    where applicable. For example:
+    - "Stratford, Ontario, Canada" instead of just "Stratford"
+    - "Stratford, London, UK" instead of just "Stratford"
+    - "Pisa, Tuscany, Italy" instead of just "Pisa"
+
+    :param place_names: List of place names to geocode.
+    :return: List of (latitude, longitude) tuples.
+    :raises ValueError: If geocoding fails or if location is potentially ambiguous.
+    """
     coords: list[tuple[float, float]] = []
     for name in place_names:
         url = (
@@ -63,6 +75,23 @@ def _geocode(place_names: List[str]) -> list[tuple[float, float]]:
         data = requests.get(url, timeout=10).json()
         if data["status"] != "OK":
             raise ValueError(f"Geocoding failed for '{name}': {data['status']}")
+
+        # Check for potential ambiguity, help LLM on the next try
+        if len(data["results"]) > 1:
+            chosen_result = data["results"][0]
+            chosen_address = chosen_result["formatted_address"]
+            alternative_addresses = [
+                r["formatted_address"] for r in data["results"][1:3]
+            ]  # Show up to 2 alternatives
+
+            warning = (
+                f"Warning: '{name}' is ambiguous and could refer to multiple locations:\n"
+                f"- Selected: {chosen_address}\n"
+                f"- Alternatives: {', '.join(alternative_addresses)}\n"
+                f"To ensure accurate routing, please be more specific (e.g., include city, region, country)."
+            )
+            raise ValueError(warning)
+
         loc = data["results"][0]["geometry"]["location"]
         coords.append((loc["lat"], loc["lng"]))
     return coords
@@ -128,10 +157,17 @@ def _cost_matrix(
 def _solve_tsp(cost: list[list[float]], round_trip: bool = True) -> list[int]:
     """Solve TSP for given cost matrix. Round trip if round_trip=True, open path otherwise."""
     n = len(cost)
+    # The RoutingIndexManager constructor signature differs depending on whether the
+    # route starts and ends at the same poi (round-trip) or at distinct pois
+    # (open path). For a round-trip, we only need to provide a single poi index. For
+    # an open path we must provide lists of start and end indices.
     if round_trip:
+        # Single poi (start == end == 0)
         mgr = pywrapcp.RoutingIndexManager(n, 1, 0)
     else:
-        mgr = pywrapcp.RoutingIndexManager(n, 1, 0, n - 1)
+        # Single poi with fixed start (0) and end (n-1) nodes.  The constructor
+        # expects lists for the start and end locations of each poi.
+        mgr = pywrapcp.RoutingIndexManager(n, 1, [0], [n - 1])
 
     routing = pywrapcp.RoutingModel(mgr)
     transit_cb = routing.RegisterTransitCallback(
@@ -186,8 +222,14 @@ def get_distance_matrix(points_of_interest: List[str], mode: str = "DRIVE") -> d
     """
     Calculate distance and duration matrices between all pairs of points of interest.
 
-    :param points_of_interest: A list of points of interest to calculate distances between.
-    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT)
+    For accurate results, provide specific place names including city, region, and/or country
+    where applicable. For example:
+    - "Stratford, Ontario, Canada" instead of just "Stratford"
+    - "Stratford, London, UK" instead of just "Stratford"
+    - "Pisa, Tuscany, Italy" instead of just "Pisa"
+
+    :param points_of_interest: A list of specific place names to calculate distances between.
+    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT), defaults to "DRIVE"
 
     :returns: A dictionary containing:
         - **durations**: Matrix of travel times in minutes between places.
@@ -218,8 +260,13 @@ def compute_optimal_route(
     """
     Calculate the optimal route through specified locations.
 
-    :param points_of_interest: A list of city or point-of-interest names.
-                               Must contain between 2 and 25 items, inclusive.
+    For accurate results, provide specific place names including city, region, and/or country
+    where applicable. For example:
+    - "Stratford, Ontario, Canada" instead of just "Stratford"
+    - "Stratford, London, UK" instead of just "Stratford"
+    - "Pisa, Tuscany, Italy" instead of just "Pisa"
+
+    :param points_of_interest: A list of specific place names. Must contain between 2 and 25 items, inclusive.
     :param alpha: The weight for travel time in minutes in the cost calculation.
     :param beta: The weight for travel distance in kilometers in the cost calculation.
     :param round_trip: If True (default), return to the first place. If False, end at the last.
@@ -252,14 +299,17 @@ def get_distance_direction(origin: str, destination: str, mode: str = "DRIVE") -
     Analyzes the comprehensive relationship between two points of interest (POIs),
     including travel distance, estimated travel time, and cardinal direction.
 
-    POIs are identified by their string names or addresses (e.g."Munich", "Eiffel Tower, Paris", "1 Infinite Loop, Cupertino, CA").
+    For accurate results, provide specific place names including city, region, and/or country
+    where applicable. For example:
+    - "Stratford, Ontario, Canada" instead of just "Stratford"
+    - "Stratford, London, UK" instead of just "Stratford"
+    - "Pisa, Tuscany, Italy" instead of just "Pisa"
 
-    :param origin: The name or address of the starting/reference point of interest.
-                   Example: "Pisa, Italy"
-    :param destination: The name or address of the ending/target point of interest.
-                       Example: "Florence, Italy"
-    :param mode: The mode of travel for distance and duration calculations.
-                 Defaults to "DRIVE". Accepted values: "DRIVE", "WALK", "BICYCLE", "TRANSIT".
+    :param origin: The specific name/address of the starting point of interest.
+                  Example: "Pisa, Tuscany, Italy"
+    :param destination: The specific name/address of the ending point of interest.
+                       Example: "Florence, Tuscany, Italy"
+    :param mode: Travel mode (DRIVE, WALK, BICYCLE, TRANSIT), defaults to "DRIVE"
 
     :returns: A dictionary detailing the relationship, with the following structure:
         - **distance** (dict): Contains travel distance information.
