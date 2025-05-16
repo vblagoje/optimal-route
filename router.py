@@ -24,7 +24,6 @@ Requirements (add to requirements.txt if you haven't already):
 
 import math
 import os
-from typing import List
 import argparse
 from urllib.parse import quote_plus
 
@@ -52,48 +51,93 @@ mcp = FastMCP("Route Planner")
 # --------------------------------------------------------------------------- #
 
 
-def _geocode(place_names: List[str]) -> list[tuple[float, float]]:
+def fetch_geocode_data(place_name: str) -> dict:
+    """
+    Fetch geocoding data for a single place name.
+
+    Raises:
+        ValueError: if request fails or status is not OK.
+    """
+    url = (
+        "https://maps.googleapis.com/maps/api/geocode/json"
+        f"?address={place_name}&key={GOOGLE_API_KEY}"
+    )
+    resp = requests.get(url, timeout=10)
+    data = resp.json()
+
+    if data["status"] != "OK":
+        raise ValueError(f"Geocoding failed for '{place_name}': {data['status']}")
+    return data
+
+
+def validate_geocode_ambiguity(results: list[dict], place_name: str) -> None:
+    """
+    Raise an error if multiple localities found (ambiguous place).
+    """
+    localities = [r for r in results if "locality" in r.get("types", [])]
+    if len(localities) > 1:
+        chosen = localities[0]["formatted_address"]
+        alternatives = [r["formatted_address"] for r in localities[1:3]]
+        raise ValueError(
+            f"Warning: '{place_name}' is ambiguous and could refer to multiple localities:\n"
+            f"- Selected: {chosen}\n"
+            f"- Alternatives: {', '.join(alternatives)}\n"
+            "To ensure accurate routing, please be more specific (e.g. include city, region, country)."
+        )
+
+
+def select_best_geocode_result(results: list[dict]) -> dict:
+    """
+    Select the best geocode result based on priority types.
+
+    Priority:
+    - locality
+    - postal_town
+    - administrative_area_level_3
+    - administrative_area_level_2
+    - administrative_area_level_1
+    - point_of_interest / establishment
+    - fallback to first
+    """
+    priority_types = [
+        "locality",
+        "postal_town",
+        "administrative_area_level_3",
+        "administrative_area_level_2",
+        "administrative_area_level_1",
+    ]
+
+    for ptype in priority_types:
+        for result in results:
+            if ptype in result.get("types", []):
+                return result
+
+    for result in results:
+        types = set(result.get("types", []))
+        if "point_of_interest" in types or "establishment" in types:
+            return result
+
+    return results[0]
+
+
+def _geocode(place_names: list[str]) -> list[tuple[float, float]]:
     """
     Resolve place names to (lat, lon) coordinates.
 
-    For accurate geocoding, provide specific place names including city, region, and/or country
-    where applicable. For example:
-    - "Stratford, Ontario, Canada" instead of just "Stratford"
-    - "Stratford, London, UK" instead of just "Stratford"
-    - "Pisa, Tuscany, Italy" instead of just "Pisa"
-
-    :param place_names: List of place names to geocode.
-    :return: List of (latitude, longitude) tuples.
-    :raises ValueError: If geocoding fails or if location is potentially ambiguous.
+    Raises ValueError on failure or ambiguity.
     """
-    coords: list[tuple[float, float]] = []
+    coords = []
     for name in place_names:
-        url = (
-            "https://maps.googleapis.com/maps/api/geocode/json"
-            f"?address={name}&key={GOOGLE_API_KEY}"
-        )
-        data = requests.get(url, timeout=10).json()
-        if data["status"] != "OK":
-            raise ValueError(f"Geocoding failed for '{name}': {data['status']}")
+        data = fetch_geocode_data(name)
+        results = data["results"]
 
-        # Check for potential ambiguity, help LLM on the next try
-        if len(data["results"]) > 1:
-            chosen_result = data["results"][0]
-            chosen_address = chosen_result["formatted_address"]
-            alternative_addresses = [
-                r["formatted_address"] for r in data["results"][1:3]
-            ]  # Show up to 2 alternatives
+        if len(results) > 1:
+            validate_geocode_ambiguity(results, name)
 
-            warning = (
-                f"Warning: '{name}' is ambiguous and could refer to multiple locations:\n"
-                f"- Selected: {chosen_address}\n"
-                f"- Alternatives: {', '.join(alternative_addresses)}\n"
-                f"To ensure accurate routing, please be more specific (e.g., include city, region, country)."
-            )
-            raise ValueError(warning)
-
-        loc = data["results"][0]["geometry"]["location"]
+        best_result = select_best_geocode_result(results)
+        loc = best_result["geometry"]["location"]
         coords.append((loc["lat"], loc["lng"]))
+
     return coords
 
 
@@ -192,7 +236,7 @@ def _solve_tsp(cost: list[list[float]], round_trip: bool = True) -> list[int]:
     return order
 
 
-def _build_google_maps_url(places: List[str]) -> str:
+def _build_google_maps_url(places: list[str]) -> str:
     """
     Constructs a Google Maps URL for a driving route with up to 25 stops.
 
@@ -218,7 +262,7 @@ def _build_google_maps_url(places: List[str]) -> str:
 #  MCP tool (auto-documented from type hints & docstring)
 # --------------------------------------------------------------------------- #
 @mcp.tool()
-def get_distance_matrix(points_of_interest: List[str], mode: str = "DRIVE") -> dict:
+def get_distance_matrix(points_of_interest: list[str], mode: str = "DRIVE") -> dict:
     """
     Calculate distance and duration matrices between all pairs of points of interest.
 
@@ -251,7 +295,7 @@ def get_distance_matrix(points_of_interest: List[str], mode: str = "DRIVE") -> d
 
 @mcp.tool()
 def compute_optimal_route(
-    points_of_interest: List[str],
+    points_of_interest: list[str],
     alpha: float = 1.0,
     beta: float = 0.2,
     round_trip: bool = True,
