@@ -318,6 +318,15 @@ def compute_optimal_route(
 
     :returns: A dictionary containing:
         - **optimal_route**: List of ordered place names forming the route.
+        - **detailed_route**: List of dictionaries with detailed information for each route segment.
+          Each segment contains:
+            - **origin**: Name of the starting point
+            - **destination**: Name of the ending point
+            - **distance_km**: Distance in kilometers to the next point
+            - **duration_min**: Travel time in minutes to the next point
+            - **mode**: Travel mode used for this segment
+        - **total_distance**: Total distance of the route in kilometers
+        - **total_duration**: Total duration of the route in minutes
         - **google_maps_url**: A direct link to Google Maps for the generated route.
     """
     num_pois = len(points_of_interest)
@@ -334,7 +343,38 @@ def compute_optimal_route(
 
     ordered_list = [points_of_interest[i] for i in order]
     google_maps_link = _build_google_maps_url(ordered_list)
-    return {"optimal_route": ordered_list, "google_maps_url": google_maps_link}
+
+    # Create detailed route information with distance and duration
+    detailed_route = []
+    total_distance = 0
+    total_duration = 0
+
+    for i in range(len(order) - 1):
+        from_idx = order[i]
+        to_idx = order[i + 1]
+        distance = kms[from_idx][to_idx]
+        duration = mins[from_idx][to_idx]
+
+        detailed_route.append(
+            {
+                "origin": points_of_interest[from_idx],
+                "destination": points_of_interest[to_idx],
+                "distance_km": distance,
+                "duration_min": duration,
+                "mode": mode,
+            }
+        )
+
+        total_distance += distance
+        total_duration += duration
+
+    return {
+        "optimal_route": ordered_list,
+        "detailed_route": detailed_route,
+        "total_distance": total_distance,
+        "total_duration": total_duration,
+        "google_maps_url": google_maps_link,
+    }
 
 
 @mcp.tool()
