@@ -18,7 +18,7 @@ EXPOSE 8080
 
 # Environment variables (to be provided at runtime)
 ENV GOOGLE_API_KEY=""
-ENV MCP_TRANSPORT="sse"
+ENV MCP_TRANSPORT="streamable-http"
 
 # Run the application
 CMD python router.py --port 8080 --transport ${MCP_TRANSPORT} 
